@@ -1,0 +1,49 @@
+name: Sync JSON Data
+
+on:
+  schedule:
+    - cron: '0 17 * * *' # Run at midnight UTC+7 daily
+  workflow_dispatch: # Allows manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  sync-json:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout 🛎
+      uses: actions/checkout@v4
+
+    - name: Fetch current teng_data.json 🧾
+      run: cp data/teng_data.json old_data.json
+
+    - name: Fetch new data 🏃🏻‍♂️
+      run: |
+        curl -L -s "${{ secrets.API_GG_SHEET }}" -o data/teng_data.json
+
+    - name: Check for changes 📊
+      id: check_changes
+      run: |
+        if diff -q data/law.json old_law.json > /dev/null; then
+          echo "No changes detected, exiting."
+          echo "changes_detected=false" >> $GITHUB_ENV
+        else
+          echo "Changes detected."
+          echo "changes_detected=true" >> $GITHUB_ENV
+        fi
+
+    - name: Remove old_law.json to prevent untracked file error 🧹
+      run: rm old_data.json
+
+    - name: Commit and Push Changes
+      if: env.changes_detected == 'true'  # Only run if changes were detected
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add data/teng_data.json
+        git commit -m "Sync JSON data from Google Apps Script"
+        git push origin main
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
